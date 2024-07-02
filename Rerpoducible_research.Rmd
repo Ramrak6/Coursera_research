@@ -1,0 +1,130 @@
+---
+title: "Research"
+author: "Anas"
+date: "2024-07-01"
+output: pdf_document
+---
+
+#Loading and processing data
+```{r}
+install.packages("ggplot2")
+install.packages("dplyr")
+library(ggplot2)
+library(dplyr)
+fileurl<- "https://d396qusza40orc.cloudfront.net/repdata%2Fdata%2Factivity.zip"
+destfile<- "activity.zip"
+download.file(fileurl,destfile, method= "curl")
+
+unzip(zipfile="activity.zip")
+activity<- read.csv("activity.csv")
+activity$date<- as.Date(activity$date)
+```
+
+# claclulating the mean total number of steps taken per day
+```{r}
+totsteps<- tapply(activity$steps, activity$date, FUN = sum, na.rm= TRUE)
+```
+
+# Plotting the mean total number of steps taken per day
+```{r}
+qplot(totsteps, binwidith= 100, xlab= "total number of steps taken each day", ylab= "Frequency")
+```
+
+# claculating the mean and the median
+```{r}
+mean(totsteps, na.rm=TRUE)
+median(totsteps, na.rm = TRUE)
+```
+
+# calculating the average daily activity
+```{r}
+steinter <- activity %>%
+  group_by(interval) %>% 
+  summarize(meansteps= mean(steps, na.rm=TRUE))
+```
+
+# ploting the average daily activity pattern
+```{r}
+ggplot(steinter, aes(x=interval, y= meansteps))+
+  geom_line(size=1.5, color="red")+
+  xlab("5 minute interval")+
+  ylab("average number of steps taken")+
+  theme_dark()
+```
+#5-minute interval, on average across all the days in the dataset, contains the maximum number of steps
+```{r}
+steinter[which.max(steinter$meansteps),]
+```
+# Imputing missing values
+```{r}
+misval<- is.na(activity)
+sum(misval)
+```
+
+#Devise a strategy for filling in all of the missing values in the dataset
+```{r}
+activityNoNA <- activity  
+for (i in 1:nrow(activity)){
+        if(is.na(activity$steps[i])){
+                activityNoNA$steps[i]<- steinter$meansteps[activityNoNA$interval[i] == steinter$interval]
+        }
+}
+
+```
+Make a histogram of the total number of steps take each day
+```{r}
+stepsPerDay <- activityNoNA %>%
+        group_by(date) %>%
+        summarize(sumsteps = sum(steps, na.rm = TRUE)) 
+
+hist(stepsPerDay$sumsteps, main = "Histogram of Daily Steps", 
+     col="lightblue", xlab="Steps")
+```
+#calculate the mean and median total number of steps taken per day
+```{r}
+meanPostNA <- round(mean(stepsPerDay$sumsteps), digits = 2)
+medianPostNA <- round(median(stepsPerDay$sumsteps), digits = 2)
+print(paste("The mean is: ", mean(meanPostNA)))
+print(paste("The median is: ", median(meanPostNA)))
+```
+
+```{r}
+NACompare <- data.frame(mean = c(mean(totsteps),meanPostNA),median = c(median(totsteps),medianPostNA))
+rownames(NACompare) <- c("Pre NA Transformation", "Post NA Transformation")
+print(NACompare)
+```
+
+#the difference in activity between weekdays and weekends
+```{r}
+activityDoW <- activityNoNA
+activityDoW$date <- as.Date(activityDoW$date)
+activityDoW$day <- ifelse(weekdays(activityDoW$date) %in% c("Saturday", "Sunday"), "weekend", "weekday")
+activityDoW$day <- as.factor(activityDoW$day)
+```
+
+#panel plot
+```{r}
+activityWeekday <- filter(activityDoW, activityDoW$day == "weekday")
+activityWeekend <- filter(activityDoW, activityDoW$day == "weekend")
+
+activityWeekday <- activityWeekday %>%
+        group_by(interval) %>%
+        summarize(steps = mean(steps)) 
+activityWeekday$day <- "weekday"
+
+activityWeekend <- activityWeekend %>%
+        group_by(interval) %>%
+        summarize(steps = mean(steps)) 
+activityWeekend$day <- "weekend"
+
+wkdayWkend <- rbind(activityWeekday, activityWeekend)
+wkdayWkend$day <- as.factor(wkdayWkend$day)
+
+
+g <- ggplot (wkdayWkend, aes (interval, steps))
+g + geom_line(size= 1.5, col="red") + facet_grid (day~.) + 
+        theme(axis.text = element_text(size = 12),axis.title = element_text(size = 14)) + 
+        labs(y = "Number of Steps") + labs(x = "Interval") + 
+        ggtitle("Average Number of Steps: Weekday vs. Weekend") + 
+        theme(plot.title = element_text(hjust = 0.5))
+```
